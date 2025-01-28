@@ -38,3 +38,17 @@ Make sure to deploy the output of `npm run build`
 ## Styling
 
 This template comes with [Tailwind CSS](https://tailwindcss.com/) already configured for a simple default starting experience. You can use whatever css framework you prefer. See the [Vite docs on css](https://vitejs.dev/guide/features.html#css) for more information.
+
+first lets run
+`docker compose up`
+
+then
+`chmod +x docker/dynamodb-init/init.sh`
+to create the table
+
+then
+`AWS_ACCESS_KEY_ID=dummy AWS_SECRET_ACCESS_KEY=dummy AWS_REGION=localhost ./docker/dynamodb-init/init.sh`
+
+then run
+`aws dynamodb list-tables --endpoint-url http://localhost:8000`
+to verify the table was created
