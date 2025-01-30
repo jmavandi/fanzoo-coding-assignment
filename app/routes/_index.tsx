@@ -1,8 +1,34 @@
-import type { MetaFunction } from "@remix-run/node";
-import { useActionData, useNavigate } from "@remix-run/react";
-import { useEffect } from "react";
-import { addUser, findUserByEmailPassword, User } from "users";
+import type { LoaderFunction, MetaFunction } from "@remix-run/node";
+import { json } from "@remix-run/node";
+import { useLoaderData } from "@remix-run/react";
+import { ScanCommand } from "@aws-sdk/client-dynamodb";
+import { unmarshall } from "@aws-sdk/util-dynamodb";
 import FanExperiences from "~/components/FanExperiences";
+import GetBookings from "~/components/GetBookings";
+import { dynamoClient } from "~/utils/db.server";
+
+export const loader: LoaderFunction = async () => {
+  try {
+    const response = await dynamoClient.send(
+      new ScanCommand({
+        TableName: "Bookings",
+      })
+    );
+
+    const bookings = response.Items?.map((item) => unmarshall(item)) || [];
+    const recentBookings = bookings
+      .sort(
+        (a, b) =>
+          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+      )
+      .slice(0, 3);
+
+    return json({ bookings: recentBookings });
+  } catch (error) {
+    console.error("Error fetching bookings:", error);
+    return json({ bookings: [] });
+  }
+};
 
 export const meta: MetaFunction = () => {
   return [
@@ -11,63 +37,13 @@ export const meta: MetaFunction = () => {
   ];
 };
 
-type ActionData = {
-  error?: string;
-  user?: User;
-};
-
-export const action = async ({ request }: { request: Request }) => {
-  const formData = await request.formData();
-  const name = formData.get("name") as string;
-  const email = formData.get("email") as string;
-  const password = formData.get("password") as string;
-
-  if (!email || !password) {
-    return Response.json(
-      { error: "Invalid email or password" },
-      { status: 400 }
-    );
-  }
-
-  const newUser = {
-    id: crypto.randomUUID(),
-    name,
-    email,
-    password,
-  };
-
-  const existingUser = findUserByEmailPassword(email, password);
-
-  const user = existingUser || newUser;
-
-  if (!existingUser) {
-    addUser(user);
-  }
-
-  return Response.json({ user: newUser }, { status: 200 });
-};
-
 export default function Index() {
-  const actionData = useActionData<ActionData>();
-  const navigate = useNavigate();
-
-  useEffect(() => {
-    const storedUser = localStorage.getItem("userLoggedIn");
-    if (storedUser) {
-      const user = JSON.parse(storedUser);
-      location.pathname = `/fanprofile/${user.id}`;
-    }
-    if (actionData?.user) {
-      if (actionData?.user) {
-        localStorage.setItem("userLoggedIn", JSON.stringify(actionData.user));
-        navigate(`/fanprofile/${actionData.user.id}`);
-      }
-    }
-  }, [actionData, navigate]);
+  const { bookings } = useLoaderData<typeof loader>();
 
   return (
     <div className="flex flex-col items-center justify-center h-screen">
       <FanExperiences />
+      {bookings.length > 0 && <GetBookings bookings={bookings} />}
     </div>
   );
 }

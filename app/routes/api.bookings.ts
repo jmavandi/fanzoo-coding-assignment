@@ -1,55 +1,8 @@
 import type { ActionFunction } from "@remix-run/node";
-import {
-  DynamoDBClient,
-  PutItemCommand,
-  CreateTableCommand,
-} from "@aws-sdk/client-dynamodb";
-import { marshall } from "@aws-sdk/util-dynamodb";
+import { PutItemCommand, QueryCommand } from "@aws-sdk/client-dynamodb";
+import { marshall, unmarshall } from "@aws-sdk/util-dynamodb";
 import { v4 as uuidv4 } from "uuid";
-
-const dynamoClient = new DynamoDBClient({
-  region: "localhost",
-  endpoint: "http://localhost:8000", // Point to local DynamoDB
-  credentials: {
-    accessKeyId: "dummy",
-    secretAccessKey: "dummy",
-  },
-});
-
-async function ensureTableExists() {
-  try {
-    await dynamoClient.send(
-      new CreateTableCommand({
-        TableName: "Bookings",
-        AttributeDefinitions: [
-          { AttributeName: "id", AttributeType: "S" },
-          { AttributeName: "userId", AttributeType: "S" },
-        ],
-        KeySchema: [{ AttributeName: "id", KeyType: "HASH" }],
-        GlobalSecondaryIndexes: [
-          {
-            IndexName: "UserIdIndex",
-            KeySchema: [{ AttributeName: "userId", KeyType: "HASH" }],
-            Projection: { ProjectionType: "ALL" },
-            ProvisionedThroughput: {
-              ReadCapacityUnits: 5,
-              WriteCapacityUnits: 5,
-            },
-          },
-        ],
-        ProvisionedThroughput: {
-          ReadCapacityUnits: 5,
-          WriteCapacityUnits: 5,
-        },
-      })
-    );
-    console.log("Table created successfully");
-  } catch (error: unknown) {
-    if (error instanceof Error && error.name !== "ResourceInUseException") {
-      throw error;
-    }
-  }
-}
+import { dynamoClient, ensureTableExists } from "~/utils/db.server";
 
 export const action: ActionFunction = async ({ request }) => {
   await ensureTableExists();
@@ -74,6 +27,9 @@ export const action: ActionFunction = async ({ request }) => {
         status: 400,
       });
     }
+
+    console.log("experienceId", experienceId);
+    console.log("userId", userId);
 
     const booking = {
       id: uuidv4(),
@@ -102,5 +58,28 @@ export const action: ActionFunction = async ({ request }) => {
       throw error;
     }
     throw new Response("Failed to create booking", { status: 500 });
+  }
+};
+
+export const loader = async () => {
+  await ensureTableExists();
+
+  try {
+    const response = await dynamoClient.send(
+      new QueryCommand({
+        TableName: "Bookings",
+      })
+    );
+
+    const bookings = response.Items?.map((item) => unmarshall(item)) || [];
+
+    return new Response(JSON.stringify(bookings), {
+      headers: {
+        "Content-Type": "application/json",
+      },
+    });
+  } catch (error) {
+    console.error("Error fetching bookings:", error);
+    throw new Response("Failed to fetch bookings", { status: 500 });
   }
 };

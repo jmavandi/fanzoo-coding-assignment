@@ -1,8 +1,12 @@
 import { useState } from "react";
 import { Dialog } from "@headlessui/react";
 import { experiences, Experience } from "experiences";
+import { useNavigate, useSearchParams } from "@remix-run/react";
 
 export default function FanExperiences() {
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const isLoggedIn = searchParams.get("logged_in") === "true";
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedExperience, setSelectedExperience] =
     useState<Experience | null>(null);
@@ -31,7 +35,7 @@ export default function FanExperiences() {
         },
         body: JSON.stringify({
           experienceId: selectedExperience.id,
-          userId: "test-user-id", // Replace with actual user ID
+          userId: "test-user-id",
           shouldFail: false,
         }),
       });
@@ -42,6 +46,7 @@ export default function FanExperiences() {
 
       setBookingStatus("success");
       setIsModalOpen(false);
+      navigate("?logged_in=true", { replace: true });
     } catch (error) {
       setBookingStatus("error");
       setErrorMessage(
@@ -170,9 +175,14 @@ export default function FanExperiences() {
               <p className="text-lg font-semibold mt-4">${experience.price}</p>
               <button
                 onClick={() => handleBookNow(experience)}
-                className="mt-4 bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
+                disabled={!isLoggedIn}
+                className={`mt-4 px-4 py-2 rounded ${
+                  isLoggedIn
+                    ? "bg-blue-600 text-white hover:bg-blue-700"
+                    : "bg-gray-300 text-gray-500 cursor-not-allowed"
+                }`}
               >
-                Book Now
+                {isLoggedIn ? "Book Now" : "Login to Book"}
               </button>
             </div>
           </div>
